@@ -2,6 +2,7 @@
 from __future__ import print_function
 from __future__ import absolute_import
 from abc import ABCMeta, abstractmethod
+from enum import Enum, auto
 try:
     from collections import OrderedDict
 except ImportError:
@@ -29,6 +30,14 @@ except AttributeError:
     getargspec = inspect.getargspec
 
 
+class EventType(Enum):
+    """Event types for INode"""
+    omit = auto()
+    start = auto()
+    finish = auto()
+    exception = auto()
+
+
 class INode(object):
     """Holds input and output Plugs and a method for computing."""
 
@@ -50,6 +59,9 @@ class INode(object):
                            else '{0}-{1}'.format(self.name, uuid.uuid4()))
         self.inputs = dict()
         self.outputs = dict()
+        self.listeners = dict()
+        for event_type, _ in EventType:
+            self.listeners[event_type] = list()
         self.metadata = metadata or {}
         self.omit = False
         try:
@@ -104,6 +116,28 @@ class INode(object):
                 downstream_nodes += [c.node for c in sub_plug.connections]
         return list(set(downstream_nodes))
 
+    def add_listener(self, event_type, listener):
+        """Registers event listener
+
+        Args:
+            event_type (EventType): Event type to listen to.
+            listener (Callable): Object to call when event happens. Listener
+                must accept a single argument - INode that fired an event.
+        """
+        if not isinstance(event_type, EventType):
+            raise ValueError('Invalid event type provided')
+
+        self.listeners[event_type.name].append(listener)
+
+    def emit(self, event_type):
+        """Emits the event of given type
+
+        Args:
+            event_type (EventType): Type of event.
+        """
+        for listener in self.listeners[event_type.name]:
+            listener(self)
+
     def evaluate(self):
         """Compute this Node, log it and clean the input Plugs.
 
@@ -113,7 +147,10 @@ class INode(object):
         if self.omit:
             LogObserver.push_message('Omitting {0} -> {1}'.format(
                 self.file_location, self.class_name))
+            self.emit(EventType.omit)
             return {}
+
+        self.emit(EventType.start)
 
         inputs = {}
         for name, plug in self.inputs.items():
@@ -127,7 +164,11 @@ class INode(object):
 
         # Compute and redirect the output to the output plugs
         start_time = time.time()
-        outputs = self.compute(**inputs) or dict()
+        try:
+            outputs = self.compute(**inputs) or dict()
+        except Exception:
+            self.emit(EventType.exception)
+            raise
         eval_time = time.time() - start_time
 
         stats = {
@@ -155,6 +196,8 @@ class INode(object):
                 self.file_location, self.class_name,
                 json.dumps(self._sort_plugs(outputs), indent=2, cls=NodeEncoder)
             ))
+
+        self.emit(EventType.finish)
 
         return outputs
 
