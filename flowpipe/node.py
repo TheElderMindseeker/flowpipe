@@ -60,8 +60,8 @@ class INode(object):
         self.inputs = dict()
         self.outputs = dict()
         self.listeners = dict()
-        for event_type, _ in EventType:
-            self.listeners[event_type] = list()
+        for event_type in EventType:
+            self.listeners[event_type.name] = list()
         self.metadata = metadata or {}
         self.omit = False
         try:
