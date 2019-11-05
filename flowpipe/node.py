@@ -2,6 +2,7 @@
 from __future__ import print_function
 from __future__ import absolute_import
 from abc import ABCMeta, abstractmethod
+from enum import Enum, auto
 try:
     from collections import OrderedDict
 except ImportError:
@@ -36,11 +37,14 @@ class INode(object):
 
     __metaclass__ = ABCMeta
 
-    EVENTS = {
-        'evaluation-omitted': Event('evaluation-omitted'),
-        'evaluation-started': Event('evaluation-started'),
-        'evaluation-finished': Event('evaluation-finished')
-    }
+    class EventType(Enum):
+        """All types of events emitted by INode"""
+        evaluation_omitted = auto()
+        evaluation_started = auto()
+        evaluation_failed = auto()
+        evaluation_finished = auto()
+
+    EVENTS = {event.name: Event(event.name) for event in EventType}
 
     def __init__(self, name=None, identifier=None, metadata=None,
                  graph='default'):
@@ -112,6 +116,10 @@ class INode(object):
                 downstream_nodes += [c.node for c in sub_plug.connections]
         return list(set(downstream_nodes))
 
+    def emit_event(self, event_type):
+        """Emits the event of the provided type"""
+        self.EVENTS[event_type.name].emit(self)
+
     def evaluate(self):
         """Compute this Node, log it and clean the input Plugs.
 
@@ -119,10 +127,10 @@ class INode(object):
         evaluation time and timestamp the computation started.
         """
         if self.omit:
-            INode.EVENTS['evaluation-omitted'].emit(self)
+            self.emit_event(self.EventType.evaluation_omitted)
             return {}
 
-        INode.EVENTS['evaluation-started'].emit(self)
+        self.emit_event(self.EventType.evaluation_started)
 
         inputs = {}
         for name, plug in self.inputs.items():
@@ -130,7 +138,11 @@ class INode(object):
 
         # Compute and redirect the output to the output plugs
         start_time = time.time()
-        outputs = self.compute(**inputs) or dict()
+        try:
+            outputs = self.compute(**inputs) or dict()
+        except Exception:
+            self.emit_event(self.EventType.evaluation_failed)
+            raise
         eval_time = time.time() - start_time
 
         self.stats = {
@@ -150,7 +162,7 @@ class INode(object):
         for input_ in self.all_inputs().values():
             input_.is_dirty = False
 
-        INode.EVENTS['evaluation-finished'].emit(self)
+        self.emit_event(self.EventType.evaluation_finished)
 
         return outputs
 

@@ -598,9 +598,9 @@ def test_node_events(clear_default_graph):
     def finished_listener(node):
         node.finished_listener_called = True
 
-    INode.EVENTS['evaluation-omitted'].register(omitted_listener)
-    INode.EVENTS['evaluation-started'].register(started_listener)
-    INode.EVENTS['evaluation-finished'].register(finished_listener)
+    INode.EVENTS[INode.EventType.evaluation_omitted.name].register(omitted_listener)
+    INode.EVENTS[INode.EventType.evaluation_started.name].register(started_listener)
+    INode.EVENTS[INode.EventType.evaluation_finished.name].register(finished_listener)
 
     node = SquareNode(in1=1)
 
