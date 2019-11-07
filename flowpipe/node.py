@@ -30,18 +30,17 @@ except AttributeError:
     getargspec = inspect.getargspec
 
 
-class EventType(Enum):
-    """Event types for INode"""
-    omit = auto()
-    start = auto()
-    finish = auto()
-    exception = auto()
-
-
 class INode(object):
     """Holds input and output Plugs and a method for computing."""
 
     __metaclass__ = ABCMeta
+
+    class EventType(Enum):
+        """Types of events emitted by INode instances"""
+        omit = auto()
+        start = auto()
+        finish = auto()
+        exception = auto()
 
     def __init__(self, name=None, identifier=None, metadata=None,
                  graph='default'):
@@ -60,7 +59,7 @@ class INode(object):
         self.inputs = dict()
         self.outputs = dict()
         self.listeners = dict()
-        for event_type in EventType:
+        for event_type in self.EventType:
             self.listeners[event_type.name] = list()
         self.metadata = metadata or {}
         self.omit = False
@@ -124,7 +123,7 @@ class INode(object):
             listener (Callable): Object to call when event happens. Listener
                 must accept a single argument - INode that fired an event.
         """
-        if not isinstance(event_type, EventType):
+        if not isinstance(event_type, self.EventType):
             raise ValueError('Invalid event type provided')
 
         self.listeners[event_type.name].append(listener)
@@ -147,10 +146,10 @@ class INode(object):
         if self.omit:
             LogObserver.push_message('Omitting {0} -> {1}'.format(
                 self.file_location, self.class_name))
-            self.emit(EventType.omit)
+            self.emit(self.EventType.omit)
             return {}
 
-        self.emit(EventType.start)
+        self.emit(self.EventType.start)
 
         inputs = {}
         for name, plug in self.inputs.items():
@@ -167,7 +166,7 @@ class INode(object):
         try:
             outputs = self.compute(**inputs) or dict()
         except Exception:
-            self.emit(EventType.exception)
+            self.emit(self.EventType.exception)
             raise
         eval_time = time.time() - start_time
 
@@ -197,7 +196,7 @@ class INode(object):
                 json.dumps(self._sort_plugs(outputs), indent=2, cls=NodeEncoder)
             ))
 
-        self.emit(EventType.finish)
+        self.emit(self.EventType.finish)
 
         return outputs
 
