@@ -18,9 +18,10 @@ def clear_default_graph():
 class SquareNode(INode):
     """Square the given value."""
 
-    def __init__(self, name=None, in1=None, *args, **kwargs):
+    def __init__(self, name=None, in1=None, fail=False, *args, **kwargs):
         """Init the node."""
         super(SquareNode, self).__init__(name, *args, **kwargs)
+        self.fail = False
         InputPlug('in1', self, value=in1)
         InputPlug('compound_in', self)
         OutputPlug('out', self)
@@ -28,6 +29,8 @@ class SquareNode(INode):
 
     def compute(self, in1, compound_in=None):
         """Square the given input and send to the output."""
+        if self.fail:
+            raise Exception('Failing on purpose')
         return {'out': in1**2}
 
 
@@ -595,12 +598,16 @@ def test_node_events(clear_default_graph):
     def started_listener(node):
         node.started_listener_called = True
 
+    def failed_listener(node):
+        node.failed_listener_called = True
+
     def finished_listener(node):
         node.finished_listener_called = True
 
     node = SquareNode(in1=1)
     node.add_listener(INode.EventType.omit, omitted_listener)
     node.add_listener(INode.EventType.start, started_listener)
+    node.add_listener(INode.EventType.exception, failed_listener)
     node.add_listener(INode.EventType.finish, finished_listener)
 
     node.omit = True
@@ -611,3 +618,9 @@ def test_node_events(clear_default_graph):
     node.evaluate()
     assert node.started_listener_called
     assert node.finished_listener_called
+
+    node.fail = True
+    with pytest.raises(Exception) as exc:
+        node.evaluate()
+        assert exc.value == 'Failing on purpose'
+    assert node.failed_listener_called
