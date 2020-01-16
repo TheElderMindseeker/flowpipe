@@ -129,14 +129,15 @@ class INode(object):
 
         self.listeners[event_type.name].append(listener)
 
-    def emit(self, event_type):
+    def emit(self, event_type, *args):
         """Emits the event of given type
 
         Args:
             event_type (EventType): Type of event.
+            *args: Any additional information provided with the event.
         """
         for listener in self.listeners[event_type.name]:
-            listener(self)
+            listener(self, *args)
 
     def evaluate(self):
         """Compute this Node, log it and clean the input Plugs.
@@ -158,8 +159,8 @@ class INode(object):
         start_time = time.time()
         try:
             outputs = self.compute(**inputs) or dict()
-        except Exception:
-            self.emit(self.EventType.exception)
+        except Exception as exc:
+            self.emit(self.EventType.exception, exc)
             raise
         eval_time = time.time() - start_time
 
